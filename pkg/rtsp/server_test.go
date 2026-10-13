@@ -164,7 +164,7 @@ func TestCleanupInactiveStreamsSynchronizesWithClientActivity(t *testing.T) {
 }
 
 func TestUDPForwarderSendsPacketsToRTSPPeerAddress(t *testing.T) {
-	peerAddr, err := net.ResolveUDPAddr("udp", "127.0.0.2:0")
+	peerAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
