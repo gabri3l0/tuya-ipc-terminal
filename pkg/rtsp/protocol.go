@@ -287,7 +287,7 @@ func (s *RTSPServer) handleOptions(client *RTSPClient, request *RTSPRequest) {
 
 func (s *RTSPServer) handleDescribe(client *RTSPClient, request *RTSPRequest) {
 	// Generate SDP for the camera stream
-	sdp := s.generateSDP(client.stream.camera, request.URL)
+	sdp := s.generateSDP(client.stream.camera, request.URL, client.stream.resolution)
 
 	headers := map[string]string{
 		"CSeq":          strconv.Itoa(request.CSeq),
@@ -444,8 +444,14 @@ func (s *RTSPServer) handleSetup(client *RTSPClient, request *RTSPRequest) {
 
 		// Add/update UDP client with current ports after video and audio setup
 		if isVideoTrack || isAudioTrack {
-			err := client.stream.webrtcBridge.rtpForwarder.AddUDPClient(client.session,
-				client.videoRTPPort, client.audioRTPPort)
+			clientHost, _, err := net.SplitHostPort(client.conn.RemoteAddr().String())
+			if err != nil {
+				sendRTSPResponse(client.conn, 500, "Internal Server Error", nil, "Failed to identify RTP client address")
+				return
+			}
+
+			err = client.stream.webrtcBridge.rtpForwarder.AddUDPClient(client.session,
+				clientHost, client.videoRTPPort, client.audioRTPPort)
 			if err != nil {
 				core.Logger.Error().Err(err).Msg("Error adding UDP RTP client")
 				sendRTSPResponse(client.conn, 500, "Internal Server Error", nil,
@@ -513,7 +519,7 @@ func (s *RTSPServer) handleUnsupportedMethod(client *RTSPClient, request *RTSPRe
 	sendRTSPResponse(client.conn, 501, "Not Implemented", headers, "")
 }
 
-func (s *RTSPServer) generateSDP(camera *storage.CameraInfo, baseURL string) string {
+func (s *RTSPServer) generateSDP(camera *storage.CameraInfo, baseURL, streamResolution string) string {
 	sdp := "v=0\r\n"
 	sdp += fmt.Sprintf("o=- %d %d IN IP4 0.0.0.0\r\n", time.Now().Unix(), time.Now().Unix())
 	sdp += "s=Tuya Camera Stream\r\n"
@@ -534,8 +540,7 @@ func (s *RTSPServer) generateSDP(camera *storage.CameraInfo, baseURL string) str
 
 	// Video media description based on skill
 	if skill != nil && len(skill.Videos) > 0 {
-		// HD (main) as default
-		streamType := tuya.GetStreamType(skill, "hd")
+		streamType := tuya.GetStreamType(skill, streamResolution)
 		isHEVC := tuya.IsHEVC(skill, streamType)
 
 		var videoInfo *tuya.VideoSkill
@@ -574,10 +579,10 @@ func (s *RTSPServer) generateSDP(camera *storage.CameraInfo, baseURL string) str
 		audioInfo := skill.Audios[0] // Nehme ersten audio stream
 
 		switch audioInfo.CodecType {
-		// case 101: // PCML
-		// 	audioSdp += "m=audio 0 RTP/AVP 97\r\n"
-		// 	audioSdp += "a=rtpmap:97 L16/8000\r\n"
-		case 101, 105: // PCML and PCMU
+		case 101: // PCM, 16-bit, mono
+			audioSdp += "m=audio 0 RTP/AVP 97\r\n"
+			audioSdp += "a=rtpmap:97 L16/8000/1\r\n"
+		case 105: // PCMU
 			audioSdp += "m=audio 0 RTP/AVP 0\r\n"
 			audioSdp += "a=rtpmap:0 PCMU/8000\r\n"
 		case 106: // PCMA
