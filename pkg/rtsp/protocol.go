@@ -579,10 +579,10 @@ func (s *RTSPServer) generateSDP(camera *storage.CameraInfo, baseURL, streamReso
 		audioInfo := skill.Audios[0] // Nehme ersten audio stream
 
 		switch audioInfo.CodecType {
-		// case 101: // PCML
-		// 	audioSdp += "m=audio 0 RTP/AVP 97\r\n"
-		// 	audioSdp += "a=rtpmap:97 L16/8000\r\n"
-		case 101, 105: // PCML and PCMU
+		case 101: // PCM, 16-bit, mono
+			audioSdp += "m=audio 0 RTP/AVP 97\r\n"
+			audioSdp += "a=rtpmap:97 L16/8000/1\r\n"
+		case 105: // PCMU
 			audioSdp += "m=audio 0 RTP/AVP 0\r\n"
 			audioSdp += "a=rtpmap:0 PCMU/8000\r\n"
 		case 106: // PCMA

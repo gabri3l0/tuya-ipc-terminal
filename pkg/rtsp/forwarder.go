@@ -27,8 +27,9 @@ type RTPForwarder struct {
 	mutex   sync.RWMutex
 
 	// RTP session info
-	videoSSRC atomic.Uint32
-	audioSSRC atomic.Uint32
+	videoSSRC        atomic.Uint32
+	audioSSRC        atomic.Uint32
+	audioPayloadType atomic.Uint32
 
 	// Packet count
 	firstVideoPacket atomic.Bool
@@ -287,8 +288,21 @@ func (rf *RTPForwarder) ForwardAudioPacket(packet *rtp.Packet) {
 		return
 	}
 
-	// Serialize packet
-	data, err := packet.Marshal()
+	// Serialize audio using the payload format advertised in the RTSP SDP.
+	forwardedPacket := *packet
+	forwardedPacket.PayloadType = uint8(rf.audioPayloadType.Load())
+
+	// Tuya PCM (codecType 101) may be little-endian, while RTP L16
+	// requires big-endian 16-bit samples.
+	if forwardedPacket.PayloadType == 97 {
+		forwardedPacket.Payload = append([]byte(nil), packet.Payload...)
+		for i := 0; i+1 < len(forwardedPacket.Payload); i += 2 {
+			forwardedPacket.Payload[i], forwardedPacket.Payload[i+1] =
+				forwardedPacket.Payload[i+1], forwardedPacket.Payload[i]
+		}
+	}
+
+	data, err := forwardedPacket.Marshal()
 	if err != nil {
 		core.Logger.Error().Err(err).Msg("Error marshaling audio RTP packet")
 		return

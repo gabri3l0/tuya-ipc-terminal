@@ -142,6 +142,19 @@ func (wb *WebRTCBridge) Start() error {
 	wb.streamType = tuya.GetStreamType(&skill, wb.resolution)
 	wb.isHEVC = tuya.IsHEVC(&skill, wb.streamType)
 
+	if len(skill.Audios) > 0 {
+		switch skill.Audios[0].CodecType {
+		case 101: // PCM 16-bit
+			wb.rtpForwarder.audioPayloadType.Store(97)
+		case 105: // PCMU
+			wb.rtpForwarder.audioPayloadType.Store(0)
+		case 106: // PCMA
+			wb.rtpForwarder.audioPayloadType.Store(8)
+		default:
+			wb.rtpForwarder.audioPayloadType.Store(0)
+		}
+	}
+
 	core.Logger.Info().Msgf("Stream settings - Resolution: %s, Type: %d, HEVC: %v", wb.resolution, wb.streamType, wb.isHEVC)
 
 	// Setup WebRTC peer connection
